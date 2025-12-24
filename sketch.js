@@ -1,0 +1,682 @@
+// ============================================================
+// Geri Dönüşüm Kahramanları - p5.js (FINAL)
+// - Responsive (ekran kaymaz)
+// - Can sistemi: düşerse 1 can, yanlış kutu 1 can
+// - Kazanma: 8 doğru -> bilgiekranı1..4 rastgele
+// - Kaybetme: can=0 -> bitiş1..4 rastgele
+// - Çöpler: üst sınırın İÇİNDEN başlar, alt sınırda TAM biter (boyut bilinçli)
+// - Ayarlar: ses slider + ses.png ikonu, müzik aç/kapa
+// - Oyun başlayınca game.mp3 loop, her butonda gamebutton.mp3
+// - Cursor: cursor.png
+// ============================================================
+
+const VW = 1536, VH = 864;
+
+// Scenes
+let scene = "MENU"; // MENU, ABOUT, SETTINGS, PLAY, END
+
+// Font
+let kasiaFont;
+
+// UI images
+let imgMenu, imgPlayBg, imgAbout, imgSettings;
+
+// End variants
+let winScreens = [];   // bilgiekranı1..4
+let loseScreens = [];  // bitiş1..4
+let endImg = null;
+let endType = "win"; // "win" | "lose"
+
+// Cursor + icon
+let cursorImg, sesIcon;
+
+// Audio
+let bgm, sfxButton;
+let musicOn = true;
+let volumeValue = 0.7;
+
+// Lives
+const MAX_LIVES = 3;
+let lives = MAX_LIVES;
+
+// Bins (png)
+let camKutu, plastikKutu, kagitKutu, organikKutu;
+let bins = [];
+
+// Trash images (cam5 yok)
+let cam1, cam2, cam3, cam4;
+let plastik1, plastik2, plastik3, plastik4, plastik5;
+let kağıt1, kağıt2, kağıt3, kağıt4, kağıt5;
+let organik1, organik2, organik3, organik4, organik5;
+
+const BIN_KEYS = ["cam", "plastik", "kağıt", "organik"];
+let trashImgs = { cam: [], plastik: [], "kağıt": [], organik: [] };
+
+// Menu buttons hitboxes
+let btnStart, btnAbout, btnSettings;
+
+// Back buttons
+let btnAboutBack, btnSettingsBack;
+
+// Settings UI
+let sliderVol;
+let sliderDragging = false;
+let btnMusicToggle;
+
+// End screen button
+let btnEndButton;
+
+// Game state
+let trashes = [];
+let spawnTimer = 0;
+let spawnInterval = 85; // spawn sıklığı
+let correctCount = 0;   // 8 olunca kazanır
+let draggingTrash = null;
+let dragOffsetX = 0, dragOffsetY = 0;
+
+// ============================================================
+// Responsive scaling helpers
+function getScaleAndOffset() {
+  const s = Math.min(width / VW, height / VH);
+  const ox = (width - VW * s) / 2;
+  const oy = (height - VH * s) / 2;
+  return { s, ox, oy };
+}
+function beginVirtualDraw() {
+  const { s, ox, oy } = getScaleAndOffset();
+  push();
+  translate(ox, oy);
+  scale(s);
+}
+function endVirtualDraw() { pop(); }
+function screenToVirtual(px, py) {
+  const { s, ox, oy } = getScaleAndOffset();
+  return { x: (px - ox) / s, y: (py - oy) / s };
+}
+
+// ============================================================
+// Safe loaders
+function loadImageSafe(path, label) {
+  return loadImage(
+    path,
+    () => console.log("✅ image ok:", label, path),
+    (e) => console.error("❌ image FAIL:", label, path, e)
+  );
+}
+function loadFontSafe(path, label) {
+  return loadFont(
+    path,
+    () => console.log("✅ font ok:", label, path),
+    (e) => console.error("❌ font FAIL:", label, path, e)
+  );
+}
+function loadSoundSafe(path, label) {
+  return loadSound(
+    path,
+    () => console.log("✅ sound ok:", label, path),
+    (e) => console.error("❌ sound FAIL:", label, path, e)
+  );
+}
+
+// ============================================================
+function preload() {
+  kasiaFont = loadFontSafe("Kasia-Bold.ttf", "Kasia");
+
+  imgMenu     = loadImageSafe("Çalışma yüzeyi 1.jpg", "menu");
+  imgPlayBg   = loadImageSafe("Çalışma yüzeyi 2.jpg", "playbg");
+  imgAbout    = loadImageSafe("hakkında.jpg", "about");
+  imgSettings = loadImageSafe("ayarlar.jpg", "settings");
+
+  // WIN screens
+  winScreens[0] = loadImageSafe("bilgiekranı1.jpg", "win1");
+  winScreens[1] = loadImageSafe("bilgiekranı2.jpg", "win2");
+  winScreens[2] = loadImageSafe("bilgiekranı3.jpg", "win3");
+  winScreens[3] = loadImageSafe("bilgiekranı4.jpg", "win4");
+
+  // LOSE screens
+  loseScreens[0] = loadImageSafe("bitiş1.jpg", "lose1");
+  loseScreens[1] = loadImageSafe("bitiş2.jpg", "lose2");
+  loseScreens[2] = loadImageSafe("bitiş3.jpg", "lose3");
+  loseScreens[3] = loadImageSafe("bitiş4.jpg", "lose4");
+
+  cursorImg = loadImageSafe("cursor.png", "cursor");
+  sesIcon   = loadImageSafe("ses.png", "sesicon");
+
+  bgm       = loadSoundSafe("game.mp3", "bgm");
+  sfxButton = loadSoundSafe("gamebutton.mp3", "btn");
+
+  // Bins
+  camKutu     = loadImageSafe("camkutu.png", "camkutu");
+  plastikKutu = loadImageSafe("plastikkutu.png", "plastikkutu");
+  kagitKutu   = loadImageSafe("kağıtkutu.png", "kağıtkutu");
+  organikKutu = loadImageSafe("organikkutu.png", "organikkutu");
+
+  // Trash images
+  cam1 = loadImageSafe("cam1.png", "cam1");
+  cam2 = loadImageSafe("cam2.png", "cam2");
+  cam3 = loadImageSafe("cam3.png", "cam3");
+  cam4 = loadImageSafe("cam4.png", "cam4");
+
+  plastik1 = loadImageSafe("plastik1.png", "plastik1");
+  plastik2 = loadImageSafe("plastik2.png", "plastik2");
+  plastik3 = loadImageSafe("plastik3.png", "plastik3");
+  plastik4 = loadImageSafe("plastik4.png", "plastik4");
+  plastik5 = loadImageSafe("plastik5.png", "plastik5");
+
+  kağıt1 = loadImageSafe("kağıt1.png", "kağıt1");
+  kağıt2 = loadImageSafe("kağıt2.png", "kağıt2");
+  kağıt3 = loadImageSafe("kağıt3.png", "kağıt3");
+  kağıt4 = loadImageSafe("kağıt4.png", "kağıt4");
+  kağıt5 = loadImageSafe("kağıt5.png", "kağıt5");
+
+  organik1 = loadImageSafe("organik1.png", "organik1");
+  organik2 = loadImageSafe("organik2.png", "organik2");
+  organik3 = loadImageSafe("organik3.png", "organik3");
+  organik4 = loadImageSafe("organik4.png", "organik4");
+  organik5 = loadImageSafe("organik5.png", "organik5");
+}
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  pixelDensity(1);
+
+  textFont(kasiaFont);
+  textStyle(BOLD);
+
+  // fill arrays
+  trashImgs.cam = [cam1, cam2, cam3, cam4]; // cam5 yok
+  trashImgs.plastik = [plastik1, plastik2, plastik3, plastik4, plastik5];
+  trashImgs["kağıt"] = [kağıt1, kağıt2, kağıt3, kağıt4, kağıt5];
+  trashImgs.organik = [organik1, organik2, organik3, organik4, organik5];
+
+  // MENU hitboxes
+  btnStart    = makeRect(VW/2 - 260, 365, 520, 140);
+  btnAbout    = makeRect(VW/2 - 520, 675, 500, 120);
+  btnSettings = makeRect(VW/2 + 20,  675, 500, 120);
+
+  // ABOUT/SETTINGS back
+  btnAboutBack    = makeRect(VW/2 - 320, 620, 640, 140);
+  btnSettingsBack = makeRect(VW/2 - 320, 620, 640, 140);
+
+  // END button
+  btnEndButton = makeRect(VW/2 - 340, 590, 680, 150);
+
+  // SETTINGS slider
+  sliderVol = { x: 520, y: 360, w: 520, h: 18, knobR: 22 };
+  btnMusicToggle = makeRect(520, 450, 520, 90);
+
+  applyAudioSettings();
+  resetGame();
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+}
+
+// Cursor stabilize
+function applyGameCursor() {
+  if (cursorImg) cursor(cursorImg, 0, 0);
+}
+function mouseMoved() { applyGameCursor(); }
+
+// ============================================================
+function draw() {
+  applyGameCursor();
+
+  background(0);
+  beginVirtualDraw();
+
+  if (scene === "MENU") drawMenu();
+  else if (scene === "ABOUT") drawAbout();
+  else if (scene === "SETTINGS") drawSettings();
+  else if (scene === "PLAY") drawPlay();
+  else if (scene === "END") drawEnd();
+
+  endVirtualDraw();
+}
+
+// ============================================================
+// Scenes
+function drawMenu() {
+  imageMode(CORNER);
+  if (imgMenu) image(imgMenu, 0, 0, VW, VH);
+}
+
+function drawAbout() {
+  imageMode(CORNER);
+  if (imgAbout) image(imgAbout, 0, 0, VW, VH);
+}
+
+function drawSettings() {
+  imageMode(CORNER);
+  if (imgSettings) image(imgSettings, 0, 0, VW, VH);
+
+  // ses icon
+  if (sesIcon) {
+    imageMode(CENTER);
+    image(sesIcon, sliderVol.x - 55, sliderVol.y - 6, 70, 70);
+    imageMode(CORNER);
+  }
+
+  drawSlider(sliderVol, volumeValue);
+
+  const label = musicOn ? "MÜZİK: AÇIK" : "MÜZİK: KAPALI";
+  drawGreenButton(btnMusicToggle, label);
+}
+
+function drawPlay() {
+  imageMode(CORNER);
+  if (imgPlayBg) image(imgPlayBg, 0, 0, VW, VH);
+
+  // bins
+  for (const b of bins) {
+    if (b.img) image(b.img, b.x, b.y, b.w, b.h);
+  }
+
+  // top bar
+  fill(0, 40);
+  rect(0, 0, VW, 90);
+
+  fill(255);
+  textAlign(LEFT, CENTER);
+  textSize(28);
+  text(`Doğru: ${correctCount}/8`, 30, 45);
+
+  drawLivesTopRight();
+
+  // spawn
+  spawnTimer++;
+  if (spawnTimer >= spawnInterval) {
+    spawnTimer = 0;
+    spawnTrash();
+  }
+
+  // update trashes
+  for (let i = trashes.length - 1; i >= 0; i--) {
+    const t = trashes[i];
+
+    // safety
+    if (!t || typeof t.update !== "function") {
+      trashes.splice(i, 1);
+      continue;
+    }
+
+    t.update();
+    t.draw();
+
+    // ✅ ALT SINIR: çöp görseli TAM alt çizgide biter
+    const bottomLimit = VH - (t.size / 2);
+    if (t.state === "fall" && t.y > bottomLimit) {
+      trashes.splice(i, 1);
+      loseLife(1);
+
+      if (lives <= 0) {
+        goLoseScreen();
+        return;
+      }
+    }
+
+    if (t.state === "inbin" && t.done) {
+      trashes.splice(i, 1);
+    }
+  }
+
+  // win
+  if (correctCount >= 8) {
+    goWinScreen();
+    return;
+  }
+}
+
+function drawEnd() {
+  imageMode(CORNER);
+  if (endImg) image(endImg, 0, 0, VW, VH);
+}
+
+// ============================================================
+// Input
+function mousePressed() {
+  const m = screenToVirtual(mouseX, mouseY);
+  const click = () => playButtonSfx();
+
+  if (scene === "MENU") {
+    if (hitRect(btnStart, m.x, m.y)) { click(); startGame(); }
+    else if (hitRect(btnAbout, m.x, m.y)) { click(); scene = "ABOUT"; }
+    else if (hitRect(btnSettings, m.x, m.y)) { click(); scene = "SETTINGS"; }
+  }
+
+  else if (scene === "ABOUT") {
+    if (hitRect(btnAboutBack, m.x, m.y)) { click(); scene = "MENU"; }
+  }
+
+  else if (scene === "SETTINGS") {
+    if (hitRect(btnSettingsBack, m.x, m.y)) { click(); scene = "MENU"; }
+    else if (hitSlider(sliderVol, m.x, m.y)) {
+      click();
+      sliderDragging = true;
+      setVolumeFromX(m.x);
+    }
+    else if (hitRect(btnMusicToggle, m.x, m.y)) {
+      click();
+      musicOn = !musicOn;
+      applyAudioSettings();
+      ensureBgmState();
+    }
+  }
+
+  else if (scene === "PLAY") {
+    // drag trash
+    for (let i = trashes.length - 1; i >= 0; i--) {
+      const t = trashes[i];
+      if (!t || typeof t.hit !== "function") continue;
+
+      if (t.hit(m.x, m.y)) {
+        draggingTrash = t;
+        dragOffsetX = m.x - draggingTrash.x;
+        dragOffsetY = m.y - draggingTrash.y;
+        draggingTrash.state = "drag";
+
+        trashes.splice(i, 1);
+        trashes.push(draggingTrash);
+        break;
+      }
+    }
+  }
+
+  else if (scene === "END") {
+    if (hitRect(btnEndButton, m.x, m.y)) {
+      click();
+
+      if (endType === "win") {
+        stopBgm();
+        resetGame();
+        scene = "MENU";
+      } else {
+        startGame(); // yeniden dene
+      }
+    }
+  }
+}
+
+function mouseDragged() {
+  const m = screenToVirtual(mouseX, mouseY);
+
+  if (scene === "SETTINGS" && sliderDragging) setVolumeFromX(m.x);
+
+  if (scene === "PLAY" && draggingTrash) {
+    draggingTrash.x = m.x - dragOffsetX;
+    draggingTrash.y = m.y - dragOffsetY;
+  }
+}
+
+function mouseReleased() {
+  const m = screenToVirtual(mouseX, mouseY);
+
+  if (scene === "SETTINGS") sliderDragging = false;
+
+  if (scene === "PLAY" && draggingTrash) {
+    const bin = getBinUnderPoint(draggingTrash.x, draggingTrash.y);
+
+    if (bin) {
+      if (bin.key === draggingTrash.type) {
+        correctCount++;
+        draggingTrash.state = "inbin";
+        draggingTrash.targetX = bin.hole.x;
+        draggingTrash.targetY = bin.hole.y;
+
+        if (correctCount >= 8) {
+          goWinScreen();
+          draggingTrash = null;
+          return;
+        }
+      } else {
+        // yanlış -> can kaybı
+        loseLife(1);
+        removeTrash(draggingTrash);
+
+        if (lives <= 0) {
+          goLoseScreen();
+          draggingTrash = null;
+          return;
+        }
+      }
+    } else {
+      // kutuya bırakmadı
+      draggingTrash.state = "fall";
+    }
+
+    draggingTrash = null;
+  }
+}
+
+// ============================================================
+// End screens
+function pickRandom(arr) {
+  const valid = arr.filter(Boolean);
+  return valid.length ? random(valid) : null;
+}
+function goWinScreen() {
+  if (scene === "END") return;
+  endType = "win";
+  endImg = pickRandom(winScreens);
+  trashes = [];
+  scene = "END";
+}
+function goLoseScreen() {
+  if (scene === "END") return;
+  endType = "lose";
+  endImg = pickRandom(loseScreens);
+  trashes = [];
+  scene = "END";
+}
+
+// ============================================================
+// Game
+function startGame() {
+  resetGame();
+  scene = "PLAY";
+  ensureAudioContext();
+  ensureBgmState();
+}
+function resetGame() {
+  trashes = [];
+  spawnTimer = 0;
+  correctCount = 0;
+  lives = MAX_LIVES;
+
+  // Bins positions (Çalışma yüzeyi 2)
+  bins = [
+    { key:"cam",     x: 80,  y: 500, w: 320, h: 320, img: camKutu,     hole:{ x: 240,  y: 585 } },
+    { key:"plastik", x: 400, y: 500, w: 340, h: 320, img: plastikKutu, hole:{ x: 570,  y: 585 } },
+    { key:"kağıt",   x: 770, y: 490, w: 340, h: 345, img: kagitKutu,   hole:{ x: 940,  y: 585 } },
+    { key:"organik", x:1135, y: 515, w: 315, h: 295, img: organikKutu, hole:{ x:1300,  y: 595 } }
+  ];
+}
+
+function spawnTrash() {
+  const type = random(BIN_KEYS);
+  const list = trashImgs[type];
+  if (!Array.isArray(list) || list.length === 0) return;
+
+  const img = random(list);
+  if (!img) return;
+
+  const x = random(110, VW - 110);
+
+  // düşüş hızı
+  const vy = random(1.6, 2.6);
+
+  // ✅ ÜST SINIR: arkaplanın içinden başlasın
+  // (çöp merkezi çizildiği için yarım boy kadar aşağı)
+  const startY = 95 / 2;
+
+  trashes.push(new TrashItem(x, startY, type, img, vy));
+}
+
+function getBinUnderPoint(px, py) {
+  for (const b of bins) {
+    if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) return b;
+  }
+  return null;
+}
+
+function removeTrash(t) {
+  const idx = trashes.indexOf(t);
+  if (idx >= 0) trashes.splice(idx, 1);
+}
+
+function loseLife(n = 1) {
+  lives = max(0, lives - n);
+}
+
+// ============================================================
+// Audio
+function ensureAudioContext() {
+  try { userStartAudio(); } catch (e) {}
+}
+function applyAudioSettings() {
+  try { masterVolume(volumeValue); } catch (e) {}
+  if (sfxButton) sfxButton.setVolume(volumeValue);
+  if (bgm) bgm.setVolume(musicOn ? volumeValue : 0);
+}
+function ensureBgmState() {
+  if (!bgm) return;
+  applyAudioSettings();
+  if (musicOn) {
+    if (!bgm.isPlaying()) bgm.loop();
+  } else {
+    if (bgm.isPlaying()) bgm.stop();
+  }
+}
+function stopBgm() {
+  if (bgm && bgm.isPlaying()) bgm.stop();
+}
+function playButtonSfx() {
+  ensureAudioContext();
+  if (!sfxButton) return;
+  if (sfxButton.isPlaying()) sfxButton.stop();
+  sfxButton.play();
+}
+
+// ============================================================
+// Slider
+function hitSlider(s, px, py) {
+  return (px >= s.x - 20 && px <= s.x + s.w + 20 &&
+          py >= s.y - 35 && py <= s.y + 35);
+}
+function setVolumeFromX(px) {
+  volumeValue = constrain((px - sliderVol.x) / sliderVol.w, 0, 1);
+  applyAudioSettings();
+}
+function drawSlider(s, value01) {
+  const trackY = s.y;
+
+  noStroke();
+  fill(0, 0, 0, 40);
+  rect(s.x + 4, trackY + 4, s.w, s.h, 20);
+
+  fill(45, 120, 75);
+  rect(s.x, trackY, s.w, s.h, 20);
+
+  fill(95, 175, 120);
+  rect(s.x, trackY, s.w * value01, s.h, 20);
+
+  const kx = s.x + s.w * value01;
+  fill(20, 90, 55);
+  circle(kx, trackY + s.h/2, s.knobR * 2);
+
+  fill(255, 255, 255, 60);
+  circle(kx - 5, trackY + s.h/2 - 5, s.knobR);
+}
+
+// ============================================================
+// Trash class (✅ boyut bilinçli)
+class TrashItem {
+  constructor(x, y, type, img, vy) {
+    this.x = x;
+    this.y = y;
+    this.type = type;
+    this.img = img;
+    this.vy = vy;
+
+    this.size = 95;
+    this.r = this.size / 2;
+
+    this.state = "fall"; // fall, drag, inbin
+    this.targetX = x;
+    this.targetY = y;
+    this.done = false;
+  }
+
+  update() {
+    if (this.state === "fall") {
+      this.y += this.vy;
+    } else if (this.state === "inbin") {
+      const dx = this.targetX - this.x;
+      const dy = this.targetY - this.y;
+      this.x += dx * 0.22;
+      this.y += dy * 0.22;
+      if (abs(dx) < 2 && abs(dy) < 2) this.done = true;
+    }
+  }
+
+  draw() {
+    imageMode(CENTER);
+    if (this.img) image(this.img, this.x, this.y, this.size, this.size);
+    imageMode(CORNER);
+  }
+
+  hit(px, py) {
+    return dist(px, py, this.x, this.y) < this.r;
+  }
+}
+
+// ============================================================
+// UI helpers
+function makeRect(x, y, w, h) { return {x, y, w, h}; }
+function hitRect(r, px, py) { return px >= r.x && px <= r.x+r.w && py >= r.y && py <= r.y+r.h; }
+
+function drawGreenButton(r, label) {
+  const shadow = color(0, 0, 0, 60);
+  noStroke();
+  fill(shadow);
+  rect(r.x + 6, r.y + 6, r.w, r.h, 22);
+
+  fill(45, 120, 75);
+  rect(r.x, r.y, r.w, r.h, 22);
+
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(30);
+  text(label, r.x + r.w/2, r.y + r.h/2 + 2);
+}
+
+function drawLivesTopRight() {
+  const startX = VW - 30;
+  const y = 45;
+  const gap = 38;
+
+  fill(255);
+  textAlign(RIGHT, CENTER);
+  textSize(22);
+  text("CAN", VW - 190, y);
+
+  for (let i = 0; i < MAX_LIVES; i++) {
+    const x = startX - i * gap;
+    if (i < lives) fill(255, 80, 90);
+    else fill(255, 255, 255, 60);
+    drawHeart(x, y, 18);
+  }
+}
+
+function drawHeart(x, y, s) {
+  push();
+  translate(x, y);
+  noStroke();
+  beginShape();
+  vertex(0, s * 0.6);
+  bezierVertex(s * 0.9, s * 0.1, s * 0.6, -s * 0.7, 0, -s * 0.15);
+  bezierVertex(-s * 0.6, -s * 0.7, -s * 0.9, s * 0.1, 0, s * 0.6);
+  endShape(CLOSE);
+  pop();
+}
