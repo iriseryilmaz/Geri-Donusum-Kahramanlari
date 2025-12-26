@@ -1,11 +1,3 @@
-// ============================================================
-// Geri Dönüşüm Kahramanları - p5.js (UPDATED)
-// ✅ çöpler.png Y ekseninde yukarı doğru uzatıldı
-// ✅ Hitbox + hole noktaları yeni ölçeğe göre güncellendi (drag-drop bozulmasın)
-// ✅ Çöpler daha yavaş düşüyor + biraz daha seyrek spawn
-// ✅ DOĞRU EŞLEŞTİRİNCE stars.mp3 çalıyor
-// ============================================================
-
 const VW = 1536, VH = 864;
 
 let scene = "MENU"; // MENU, ABOUT, SETTINGS, PLAY, END
@@ -29,7 +21,7 @@ let endType = "win";
 let cursorImg, sesIcon;
 
 // Audio
-let bgm, sfxButton, sfxStars; // ✅ eklendi
+let bgm, sfxButton, sfxStars;
 let musicOn = true;
 let volumeValue = 0.7;
 
@@ -77,7 +69,6 @@ let dragOffsetX = 0, dragOffsetY = 0;
 // Stars FX
 let starsFX = []; // {x,y,life,maxLife}
 
-// ============================================================
 // Responsive scaling helpers
 function getScaleAndOffset() {
   const s = Math.min(width / VW, height / VH);
@@ -97,7 +88,7 @@ function screenToVirtual(px, py) {
   return { x: (px - ox) / s, y: (py - oy) / s };
 }
 
-// ============================================================
+
 // Safe loaders
 function loadImageSafe(path, label) {
   return loadImage(
@@ -121,7 +112,7 @@ function loadSoundSafe(path, label) {
   );
 }
 
-// ============================================================
+
 function preload() {
   kasiaFont = loadFontSafe("Kasia-Bold.ttf", "Kasia");
 
@@ -148,7 +139,7 @@ function preload() {
 
   bgm       = loadSoundSafe("game.mp3", "bgm");
   sfxButton = loadSoundSafe("gamebutton.mp3", "btn");
-  sfxStars  = loadSoundSafe("stars.mp3", "stars"); // ✅ eklendi
+  sfxStars  = loadSoundSafe("stars.mp3", "stars"); 
 
   // Trash images
   cam1 = loadImageSafe("cam1.png", "cam1");
@@ -217,7 +208,7 @@ function applyGameCursor() {
 }
 function mouseMoved() { applyGameCursor(); }
 
-// ============================================================
+
 function draw() {
   applyGameCursor();
 
@@ -233,7 +224,7 @@ function draw() {
   endVirtualDraw();
 }
 
-// ============================================================
+
 // Scenes
 function drawMenu() {
   imageMode(CORNER);
@@ -265,11 +256,11 @@ function drawPlay() {
   imageMode(CORNER);
   if (imgPlayBg) image(imgPlayBg, 0, 0, VW, VH);
 
-  // ✅ ÇÖPLER.PNG: Y ekseninde yukarı doğru uzatıldı
+  
   const binsX = 60;
-  const binsY = 300;   // yukarı çekildi
+  const binsY = 300;   // çöpler yukarı 
   const binsW = 1415;
-  const binsH = 550;   // yükseklik arttı (uzadı)
+  const binsH = 550;   // yükseklik
   if (binsSheetImg) image(binsSheetImg, binsX, binsY, binsW, binsH);
 
   // UI top bar
@@ -298,7 +289,7 @@ function drawPlay() {
     t.update();
     t.draw();
 
-    // ✅ ALT SINIR: çöp görseli canvas altına değince kaybolur
+    // ALT SINIR: düşen çöpler canvas altına değince kaybolur
     const bottomLimit = VH - (t.size / 2);
     if (t.state === "fall" && t.y > bottomLimit) {
       trashes.splice(i, 1);
@@ -319,7 +310,6 @@ function drawEnd() {
   if (endImg) image(endImg, 0, 0, VW, VH);
 }
 
-// ============================================================
 // Input
 function mousePressed() {
   const m = screenToVirtual(mouseX, mouseY);
@@ -389,7 +379,7 @@ function mouseReleased() {
       if (bin.key === draggingTrash.type) {
         correctCount++;
         addStarsFX(draggingTrash.x, draggingTrash.y - 70);
-        playStarsSfx(); // ✅ doğru eşleşince stars.mp3
+        playStarsSfx(); // doğru eşleşince stars sesi çalıyor
 
         draggingTrash.state = "inbin";
         draggingTrash.targetX = bin.hole.x;
@@ -413,7 +403,7 @@ function mouseReleased() {
   }
 }
 
-// ============================================================
+
 // End screens
 function pickRandom(arr) {
   const valid = arr.filter(Boolean);
@@ -436,7 +426,7 @@ function goLoseScreen() {
   scene = "END";
 }
 
-// ============================================================
+
 // Game
 function startGame() {
   resetGame();
@@ -452,7 +442,7 @@ function resetGame() {
   correctCount = 0;
   lives = MAX_LIVES;
 
-  // ✅ Hitbox'lar (çöpler.png uzatılmış haline göre)
+  // Hitbox'lar (çöpler.png uzatılmış haline göre uzatma vs)
   bins = [
     { key:"cam",     x:  95, y: 440, w: 305, h: 410, hole:{ x: 250,  y: 585 } },
     { key:"plastik", x: 435, y: 440, w: 330, h: 410, hole:{ x: 600,  y: 585 } },
@@ -471,10 +461,10 @@ function spawnTrash() {
 
   const x = random(110, VW - 110);
 
-  // ✅ Daha yavaş düşüş
+  // çöplerin düşüş hızı
   const vy = random(0.85, 1.45);
 
-  // ✅ ÜST SINIR: arkaplanın içinden başlasın
+  // çöpler canvasın içinden başlaması için
   const startY = 95 / 2;
 
   trashes.push(new TrashItem(x, startY, type, img, vy));
@@ -496,7 +486,6 @@ function loseLife(n = 1) {
   lives = max(0, lives - n);
 }
 
-// ============================================================
 // Stars FX
 function addStarsFX(x, y) {
   starsFX.push({ x, y, life: 0, maxLife: 28 });
@@ -525,7 +514,6 @@ function updateAndDrawStars() {
   }
 }
 
-// ============================================================
 // Audio
 function ensureAudioContext() {
   try { userStartAudio(); } catch (e) {}
@@ -533,7 +521,7 @@ function ensureAudioContext() {
 function applyAudioSettings() {
   try { masterVolume(volumeValue); } catch (e) {}
   if (sfxButton) sfxButton.setVolume(volumeValue);
-  if (sfxStars)  sfxStars.setVolume(volumeValue); // ✅ eklendi
+  if (sfxStars)  sfxStars.setVolume(volumeValue); 
   if (bgm) bgm.setVolume(musicOn ? volumeValue : 0);
 }
 function ensureBgmState() {
@@ -555,7 +543,7 @@ function playButtonSfx() {
   sfxButton.play();
 }
 
-// ✅ stars.mp3 çalan helper
+// stars.mp3 çal
 function playStarsSfx() {
   ensureAudioContext();
   if (!sfxStars) return;
@@ -563,7 +551,7 @@ function playStarsSfx() {
   sfxStars.play();
 }
 
-// ============================================================
+
 // Slider
 function hitSlider(s, px, py) {
   return (px >= s.x - 20 && px <= s.x + s.w + 20 &&
@@ -594,7 +582,7 @@ function drawSlider(s, value01) {
   circle(kx - 5, trackY + s.h/2 - 5, s.knobR);
 }
 
-// ============================================================
+
 // Trash class
 class TrashItem {
   constructor(x, y, type, img, vy) {
@@ -636,7 +624,7 @@ class TrashItem {
   }
 }
 
-// ============================================================
+
 // UI helpers
 function makeRect(x, y, w, h) { return {x, y, w, h}; }
 function hitRect(r, px, py) { return px >= r.x && px <= r.x+r.w && py >= r.y && py <= r.y+r.h; }
