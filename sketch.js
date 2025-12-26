@@ -1,37 +1,35 @@
 // ============================================================
-// Geri Dönüşüm Kahramanları - p5.js (FINAL)
-// - Responsive (ekran kaymaz)
-// - Can sistemi: düşerse 1 can, yanlış kutu 1 can
-// - Kazanma: 8 doğru -> bilgiekranı1..4 rastgele
-// - Kaybetme: can=0 -> bitiş1..4 rastgele
-// - Çöpler: üst sınırın İÇİNDEN başlar, alt sınırda TAM biter (boyut bilinçli)
-// - Ayarlar: ses slider + ses.png ikonu, müzik aç/kapa
-// - Oyun başlayınca game.mp3 loop, her butonda gamebutton.mp3
-// - Cursor: cursor.png
+// Geri Dönüşüm Kahramanları - p5.js (UPDATED)
+// ✅ çöpler.png Y ekseninde yukarı doğru uzatıldı
+// ✅ Hitbox + hole noktaları yeni ölçeğe göre güncellendi (drag-drop bozulmasın)
+// ✅ Çöpler daha yavaş düşüyor + biraz daha seyrek spawn
+// ✅ DOĞRU EŞLEŞTİRİNCE stars.mp3 çalıyor
 // ============================================================
 
 const VW = 1536, VH = 864;
 
-// Scenes
 let scene = "MENU"; // MENU, ABOUT, SETTINGS, PLAY, END
 
-// Font
 let kasiaFont;
 
 // UI images
 let imgMenu, imgPlayBg, imgAbout, imgSettings;
 
+// bins sheet + stars
+let binsSheetImg; // çöpler.png
+let starsImg;     // yıldızlar.png
+
 // End variants
 let winScreens = [];   // bilgiekranı1..4
 let loseScreens = [];  // bitiş1..4
 let endImg = null;
-let endType = "win"; // "win" | "lose"
+let endType = "win";
 
 // Cursor + icon
 let cursorImg, sesIcon;
 
 // Audio
-let bgm, sfxButton;
+let bgm, sfxButton, sfxStars; // ✅ eklendi
 let musicOn = true;
 let volumeValue = 0.7;
 
@@ -39,11 +37,10 @@ let volumeValue = 0.7;
 const MAX_LIVES = 3;
 let lives = MAX_LIVES;
 
-// Bins (png)
-let camKutu, plastikKutu, kagitKutu, organikKutu;
+// Bins hitboxes
 let bins = [];
 
-// Trash images (cam5 yok)
+// Trash images
 let cam1, cam2, cam3, cam4;
 let plastik1, plastik2, plastik3, plastik4, plastik5;
 let kağıt1, kağıt2, kağıt3, kağıt4, kağıt5;
@@ -69,10 +66,16 @@ let btnEndButton;
 // Game state
 let trashes = [];
 let spawnTimer = 0;
-let spawnInterval = 85; // spawn sıklığı
-let correctCount = 0;   // 8 olunca kazanır
+
+// ✅ Daha yavaş spawn
+let spawnInterval = 120;
+
+let correctCount = 0;
 let draggingTrash = null;
 let dragOffsetX = 0, dragOffsetY = 0;
+
+// Stars FX
+let starsFX = []; // {x,y,life,maxLife}
 
 // ============================================================
 // Responsive scaling helpers
@@ -127,13 +130,14 @@ function preload() {
   imgAbout    = loadImageSafe("hakkında.jpg", "about");
   imgSettings = loadImageSafe("ayarlar.jpg", "settings");
 
-  // WIN screens
+  binsSheetImg = loadImageSafe("çöpler.png", "binsSheet");
+  starsImg     = loadImageSafe("yıldızlar.png", "stars");
+
   winScreens[0] = loadImageSafe("bilgiekranı1.jpg", "win1");
   winScreens[1] = loadImageSafe("bilgiekranı2.jpg", "win2");
   winScreens[2] = loadImageSafe("bilgiekranı3.jpg", "win3");
   winScreens[3] = loadImageSafe("bilgiekranı4.jpg", "win4");
 
-  // LOSE screens
   loseScreens[0] = loadImageSafe("bitiş1.jpg", "lose1");
   loseScreens[1] = loadImageSafe("bitiş2.jpg", "lose2");
   loseScreens[2] = loadImageSafe("bitiş3.jpg", "lose3");
@@ -144,12 +148,7 @@ function preload() {
 
   bgm       = loadSoundSafe("game.mp3", "bgm");
   sfxButton = loadSoundSafe("gamebutton.mp3", "btn");
-
-  // Bins
-  camKutu     = loadImageSafe("camkutu.png", "camkutu");
-  plastikKutu = loadImageSafe("plastikkutu.png", "plastikkutu");
-  kagitKutu   = loadImageSafe("kağıtkutu.png", "kağıtkutu");
-  organikKutu = loadImageSafe("organikkutu.png", "organikkutu");
+  sfxStars  = loadSoundSafe("stars.mp3", "stars"); // ✅ eklendi
 
   // Trash images
   cam1 = loadImageSafe("cam1.png", "cam1");
@@ -183,8 +182,7 @@ function setup() {
   textFont(kasiaFont);
   textStyle(BOLD);
 
-  // fill arrays
-  trashImgs.cam = [cam1, cam2, cam3, cam4]; // cam5 yok
+  trashImgs.cam = [cam1, cam2, cam3, cam4];
   trashImgs.plastik = [plastik1, plastik2, plastik3, plastik4, plastik5];
   trashImgs["kağıt"] = [kağıt1, kağıt2, kağıt3, kağıt4, kağıt5];
   trashImgs.organik = [organik1, organik2, organik3, organik4, organik5];
@@ -213,7 +211,7 @@ function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
 }
 
-// Cursor stabilize
+// Cursor
 function applyGameCursor() {
   if (cursorImg) cursor(cursorImg, 0, 0);
 }
@@ -251,7 +249,6 @@ function drawSettings() {
   imageMode(CORNER);
   if (imgSettings) image(imgSettings, 0, 0, VW, VH);
 
-  // ses icon
   if (sesIcon) {
     imageMode(CENTER);
     image(sesIcon, sliderVol.x - 55, sliderVol.y - 6, 70, 70);
@@ -268,12 +265,14 @@ function drawPlay() {
   imageMode(CORNER);
   if (imgPlayBg) image(imgPlayBg, 0, 0, VW, VH);
 
-  // bins
-  for (const b of bins) {
-    if (b.img) image(b.img, b.x, b.y, b.w, b.h);
-  }
+  // ✅ ÇÖPLER.PNG: Y ekseninde yukarı doğru uzatıldı
+  const binsX = 60;
+  const binsY = 300;   // yukarı çekildi
+  const binsW = 1415;
+  const binsH = 550;   // yükseklik arttı (uzadı)
+  if (binsSheetImg) image(binsSheetImg, binsX, binsY, binsW, binsH);
 
-  // top bar
+  // UI top bar
   fill(0, 40);
   rect(0, 0, VW, 90);
 
@@ -294,38 +293,25 @@ function drawPlay() {
   // update trashes
   for (let i = trashes.length - 1; i >= 0; i--) {
     const t = trashes[i];
-
-    // safety
-    if (!t || typeof t.update !== "function") {
-      trashes.splice(i, 1);
-      continue;
-    }
+    if (!t || typeof t.update !== "function") { trashes.splice(i, 1); continue; }
 
     t.update();
     t.draw();
 
-    // ✅ ALT SINIR: çöp görseli TAM alt çizgide biter
+    // ✅ ALT SINIR: çöp görseli canvas altına değince kaybolur
     const bottomLimit = VH - (t.size / 2);
     if (t.state === "fall" && t.y > bottomLimit) {
       trashes.splice(i, 1);
       loseLife(1);
-
-      if (lives <= 0) {
-        goLoseScreen();
-        return;
-      }
+      if (lives <= 0) { goLoseScreen(); return; }
     }
 
-    if (t.state === "inbin" && t.done) {
-      trashes.splice(i, 1);
-    }
+    if (t.state === "inbin" && t.done) trashes.splice(i, 1);
   }
 
-  // win
-  if (correctCount >= 8) {
-    goWinScreen();
-    return;
-  }
+  updateAndDrawStars();
+
+  if (correctCount >= 8) { goWinScreen(); return; }
 }
 
 function drawEnd() {
@@ -351,31 +337,19 @@ function mousePressed() {
 
   else if (scene === "SETTINGS") {
     if (hitRect(btnSettingsBack, m.x, m.y)) { click(); scene = "MENU"; }
-    else if (hitSlider(sliderVol, m.x, m.y)) {
-      click();
-      sliderDragging = true;
-      setVolumeFromX(m.x);
-    }
-    else if (hitRect(btnMusicToggle, m.x, m.y)) {
-      click();
-      musicOn = !musicOn;
-      applyAudioSettings();
-      ensureBgmState();
-    }
+    else if (hitSlider(sliderVol, m.x, m.y)) { click(); sliderDragging = true; setVolumeFromX(m.x); }
+    else if (hitRect(btnMusicToggle, m.x, m.y)) { click(); musicOn = !musicOn; applyAudioSettings(); ensureBgmState(); }
   }
 
   else if (scene === "PLAY") {
-    // drag trash
     for (let i = trashes.length - 1; i >= 0; i--) {
       const t = trashes[i];
       if (!t || typeof t.hit !== "function") continue;
-
       if (t.hit(m.x, m.y)) {
         draggingTrash = t;
         dragOffsetX = m.x - draggingTrash.x;
         dragOffsetY = m.y - draggingTrash.y;
         draggingTrash.state = "drag";
-
         trashes.splice(i, 1);
         trashes.push(draggingTrash);
         break;
@@ -386,14 +360,8 @@ function mousePressed() {
   else if (scene === "END") {
     if (hitRect(btnEndButton, m.x, m.y)) {
       click();
-
-      if (endType === "win") {
-        stopBgm();
-        resetGame();
-        scene = "MENU";
-      } else {
-        startGame(); // yeniden dene
-      }
+      if (endType === "win") { stopBgm(); resetGame(); scene = "MENU"; }
+      else { startGame(); }
     }
   }
 }
@@ -420,6 +388,9 @@ function mouseReleased() {
     if (bin) {
       if (bin.key === draggingTrash.type) {
         correctCount++;
+        addStarsFX(draggingTrash.x, draggingTrash.y - 70);
+        playStarsSfx(); // ✅ doğru eşleşince stars.mp3
+
         draggingTrash.state = "inbin";
         draggingTrash.targetX = bin.hole.x;
         draggingTrash.targetY = bin.hole.y;
@@ -430,18 +401,11 @@ function mouseReleased() {
           return;
         }
       } else {
-        // yanlış -> can kaybı
         loseLife(1);
         removeTrash(draggingTrash);
-
-        if (lives <= 0) {
-          goLoseScreen();
-          draggingTrash = null;
-          return;
-        }
+        if (lives <= 0) { goLoseScreen(); draggingTrash = null; return; }
       }
     } else {
-      // kutuya bırakmadı
       draggingTrash.state = "fall";
     }
 
@@ -460,6 +424,7 @@ function goWinScreen() {
   endType = "win";
   endImg = pickRandom(winScreens);
   trashes = [];
+  starsFX = [];
   scene = "END";
 }
 function goLoseScreen() {
@@ -467,6 +432,7 @@ function goLoseScreen() {
   endType = "lose";
   endImg = pickRandom(loseScreens);
   trashes = [];
+  starsFX = [];
   scene = "END";
 }
 
@@ -478,18 +444,20 @@ function startGame() {
   ensureAudioContext();
   ensureBgmState();
 }
+
 function resetGame() {
   trashes = [];
+  starsFX = [];
   spawnTimer = 0;
   correctCount = 0;
   lives = MAX_LIVES;
 
-  // Bins positions (Çalışma yüzeyi 2)
+  // ✅ Hitbox'lar (çöpler.png uzatılmış haline göre)
   bins = [
-    { key:"cam",     x: 80,  y: 500, w: 320, h: 320, img: camKutu,     hole:{ x: 240,  y: 585 } },
-    { key:"plastik", x: 400, y: 500, w: 340, h: 320, img: plastikKutu, hole:{ x: 570,  y: 585 } },
-    { key:"kağıt",   x: 770, y: 490, w: 340, h: 345, img: kagitKutu,   hole:{ x: 940,  y: 585 } },
-    { key:"organik", x:1135, y: 515, w: 315, h: 295, img: organikKutu, hole:{ x:1300,  y: 595 } }
+    { key:"cam",     x:  95, y: 440, w: 305, h: 410, hole:{ x: 250,  y: 585 } },
+    { key:"plastik", x: 435, y: 440, w: 330, h: 410, hole:{ x: 600,  y: 585 } },
+    { key:"kağıt",   x: 805, y: 440, w: 330, h: 410, hole:{ x: 970,  y: 585 } },
+    { key:"organik", x:1165, y: 440, w: 305, h: 410, hole:{ x:1320,  y: 595 } }
   ];
 }
 
@@ -503,11 +471,10 @@ function spawnTrash() {
 
   const x = random(110, VW - 110);
 
-  // düşüş hızı
-  const vy = random(1.6, 2.6);
+  // ✅ Daha yavaş düşüş
+  const vy = random(0.85, 1.45);
 
   // ✅ ÜST SINIR: arkaplanın içinden başlasın
-  // (çöp merkezi çizildiği için yarım boy kadar aşağı)
   const startY = 95 / 2;
 
   trashes.push(new TrashItem(x, startY, type, img, vy));
@@ -530,6 +497,35 @@ function loseLife(n = 1) {
 }
 
 // ============================================================
+// Stars FX
+function addStarsFX(x, y) {
+  starsFX.push({ x, y, life: 0, maxLife: 28 });
+}
+function updateAndDrawStars() {
+  if (!starsImg) return;
+
+  for (let i = starsFX.length - 1; i >= 0; i--) {
+    const fx = starsFX[i];
+    fx.life++;
+
+    const t = fx.life / fx.maxLife;
+    const alpha = 255 * (1 - t);
+    const s = 1.0 + 0.25 * sin(t * PI);
+    const floatUp = 18 * t;
+
+    push();
+    tint(255, alpha);
+    imageMode(CENTER);
+    image(starsImg, fx.x, fx.y - floatUp, 180 * s, 90 * s);
+    imageMode(CORNER);
+    noTint();
+    pop();
+
+    if (fx.life >= fx.maxLife) starsFX.splice(i, 1);
+  }
+}
+
+// ============================================================
 // Audio
 function ensureAudioContext() {
   try { userStartAudio(); } catch (e) {}
@@ -537,6 +533,7 @@ function ensureAudioContext() {
 function applyAudioSettings() {
   try { masterVolume(volumeValue); } catch (e) {}
   if (sfxButton) sfxButton.setVolume(volumeValue);
+  if (sfxStars)  sfxStars.setVolume(volumeValue); // ✅ eklendi
   if (bgm) bgm.setVolume(musicOn ? volumeValue : 0);
 }
 function ensureBgmState() {
@@ -556,6 +553,14 @@ function playButtonSfx() {
   if (!sfxButton) return;
   if (sfxButton.isPlaying()) sfxButton.stop();
   sfxButton.play();
+}
+
+// ✅ stars.mp3 çalan helper
+function playStarsSfx() {
+  ensureAudioContext();
+  if (!sfxStars) return;
+  if (sfxStars.isPlaying()) sfxStars.stop();
+  sfxStars.play();
 }
 
 // ============================================================
@@ -590,7 +595,7 @@ function drawSlider(s, value01) {
 }
 
 // ============================================================
-// Trash class (✅ boyut bilinçli)
+// Trash class
 class TrashItem {
   constructor(x, y, type, img, vy) {
     this.x = x;
